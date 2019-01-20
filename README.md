@@ -18,6 +18,8 @@ Functionality
  - executor.h: Helper class that can execute programs in the background and
    report back via callback. It takes care of process reaping and ensuring
    a maximum number of processes are running concurrently.
+ - httpclient.h: Implementation of HTTP/S client on top of libcurl using the
+   mutli interface (so only one thread per class is used).
 
 
 Utility/Helper classes
@@ -28,3 +30,5 @@ Utility/Helper classes
    so the server can be parallelized.
  - lrucache.h: Class that implements an LRU cache, very useful to keep data in
    memory for an efficient lookup and defer its flushing to evictions.
+ - util.h: Misc functions around strings.
+
