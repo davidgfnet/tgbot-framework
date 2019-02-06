@@ -113,6 +113,8 @@ public:
 		curl_easy_setopt(req, CURLOPT_TIMEOUT, TRANSFER_TIMEOUT);
 		curl_easy_setopt(req, CURLOPT_WRITEFUNCTION, wrapperfn);
 		curl_easy_setopt(req, CURLOPT_WRITEDATA, userq.get());
+		curl_easy_setopt(req, CURLOPT_FOLLOWLOCATION, 1);
+		curl_easy_setopt(req, CURLOPT_MAXREDIRS, 5);
 
 		// Enqueues a query in the pending queue
 		{
