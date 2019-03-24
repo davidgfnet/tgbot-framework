@@ -32,11 +32,16 @@ uint64_t from63(std::string s) {
 std::string hsize(uint64_t size) {
 	if (size < (1ULL<<10))
 		return std::to_string(size) + "B";
-	if (size < (1ULL<<20))
-		return std::to_string(size >> 10) + "KB";
-	if (size < (1ULL<<30))
-		return std::to_string(size >> 20) + "MB";
-	return std::to_string(size >> 30) + "GB";
+
+	const char *prefixes = "KMGTPE";
+	unsigned dec = 0, c = 0;
+	while (true) {
+		dec = (size & 1023);
+		size >>= 10;
+		if (size < (1ULL<<10))
+			return std::to_string(size) + "." + std::to_string(dec/103) + std::string(1, prefixes[c]) + "iB";
+		c++;
+	}
 }
 
 std::string trim(const std::string &str) {
