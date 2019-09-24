@@ -3,6 +3,9 @@
 // It is able to perform requests and add requests on the fly.
 // Uses libcurl as backend.
 
+#ifndef __HTTP_CLIENT_H__
+#define __HTTP_CLIENT_H__
+
 #include <memory>
 #include <set>
 #include <functional>
@@ -32,7 +35,8 @@ public:
 		std::string name, content, mimetype;
 	};
 
-	HttpClient() : multi_handle(curl_multi_init()), end(false) {
+	HttpClient(unsigned connto = CONNECT_TIMEOUT, unsigned tranfto = TRANSFER_TIMEOUT)
+		: multi_handle(curl_multi_init()), end(false), connto(connto), tranfto(tranfto) {
 		// Create a new pipe, make both ends non-blocking
 		if (pipe(pipefd) < 0)
 			throw std::system_error();
@@ -109,8 +113,8 @@ public:
 		auto userq = std::make_unique<t_query>();
 		userq->wrcb = wrcb; userq->donecb = donecb;
 		curl_easy_setopt(req, CURLOPT_URL, (url + argstr).c_str());
-		curl_easy_setopt(req, CURLOPT_CONNECTTIMEOUT, CONNECT_TIMEOUT);
-		curl_easy_setopt(req, CURLOPT_TIMEOUT, TRANSFER_TIMEOUT);
+		curl_easy_setopt(req, CURLOPT_CONNECTTIMEOUT, connto);
+		curl_easy_setopt(req, CURLOPT_TIMEOUT, tranfto);
 		curl_easy_setopt(req, CURLOPT_WRITEFUNCTION, wrapperfn);
 		curl_easy_setopt(req, CURLOPT_WRITEDATA, userq.get());
 		curl_easy_setopt(req, CURLOPT_FOLLOWLOCATION, 1);
@@ -170,8 +174,8 @@ public:
 
 		CURL *req = curl_easy_init();
 		curl_easy_setopt(req, CURLOPT_URL, url.c_str());
-		curl_easy_setopt(req, CURLOPT_CONNECTTIMEOUT, CONNECT_TIMEOUT);
-		curl_easy_setopt(req, CURLOPT_TIMEOUT, TRANSFER_TIMEOUT);
+		curl_easy_setopt(req, CURLOPT_CONNECTTIMEOUT, connto);
+		curl_easy_setopt(req, CURLOPT_TIMEOUT, tranfto);
 		curl_easy_setopt(req, CURLOPT_HTTPPOST, userq->form);
 		curl_easy_setopt(req, CURLOPT_WRITEFUNCTION, donothing);
 		curl_easy_setopt(req, CURLOPT_WRITEDATA, NULL);
@@ -272,7 +276,11 @@ private:
 	std::map<CURL*, std::unique_ptr<t_query>> request_set;
 	// Signal end of thread
 	bool end;
+	// Timeouts
+	unsigned connto, tranfto;
 	// Pipe used to signal select() end, so we can add new requests
 	int pipefd[2];
 };
+
+#endif
 
