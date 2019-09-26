@@ -138,7 +138,7 @@ private:
 
 				// Push via GET request
 				auto args = upd->serialize();
-				client->doGET(BASE_GA_URL, args, nullptr,
+				client.doGET(BASE_GA_URL, args, nullptr,
 					[upd, this] (bool ok) mutable {
 						if (!ok && upd->attempts < 5) {
 							// Failed! Let's retry, to simplify things just add to queue again
@@ -161,7 +161,7 @@ private:
 
 	// Mutex protected queue and http client
 	std::list<GAUpdate*> event_queue;
-	HttpClient *client;
+	HttpClient client;
 	std::mutex mu;
 
 	// Thread that sits in the background flushing stuff
