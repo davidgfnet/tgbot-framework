@@ -87,7 +87,8 @@ public:
 
 class GoogleAnalyticsLogger {
 public:
-	GoogleAnalyticsLogger(std::string trackingid) {
+	GoogleAnalyticsLogger(std::string trackingid)
+	 : trackingid(trackingid) {
 		// Spawn a thread to push events, hopefully enough
 		writerth = std::thread(&GoogleAnalyticsLogger::pusher_thread, this);
 	}
@@ -134,10 +135,12 @@ private:
 					std::lock_guard<std::mutex> guard(mu);
 					upd = event_queue.front();
 					event_queue.pop_front();
+					empty = event_queue.empty();
 				}
 
 				// Push via GET request
 				auto args = upd->serialize();
+				args["tid"] = trackingid;
 				client.doGET(BASE_GA_URL, args, nullptr,
 					[upd, this] (bool ok) mutable {
 						if (!ok && upd->attempts < 5) {
@@ -158,6 +161,8 @@ private:
 				break;
 		}
 	}
+
+	std::string trackingid;
 
 	// Mutex protected queue and http client
 	std::list<GAUpdate*> event_queue;
