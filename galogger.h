@@ -46,7 +46,7 @@ public:
 	virtual std::map<std::string, std::string> serialize() const {
 		return {
 			{"v",   "1"},
-			{"uid", std::to_string(userid)},
+			{"cid", std::to_string(userid)},
 			{"qt",  std::to_string(ptimems() - t)},
 		};
 	}
