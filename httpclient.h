@@ -19,6 +19,34 @@
 typedef size_t(*curl_write_function)(char *ptr, size_t size, size_t nmemb, void *userdata);
 
 class HttpClient {
+private:
+	class t_query {
+	public:
+		t_query() : form(NULL) {}
+		~t_query() {
+			if (form)
+				curl_formfree(form);
+		}
+		std::function<bool(std::string)> wrcb;  // Write callback (data download)
+		std::function<void(bool)>      donecb;  // End callback with result
+		std::string buffer;                     // Data that's being pushed
+		struct curl_httppost *form;             // Any form post data
+	};
+	// Client thread
+	std::thread worker;
+	// Queue of pending requests to be performed
+	std::map<CURL*, std::unique_ptr<t_query>> rqueue;
+	std::mutex rqueue_mutex;
+	// Multi handlers that is in charge of doing requests.
+	CURLM *multi_handle;
+	std::map<CURL*, std::unique_ptr<t_query>> request_set;
+	// Signal end of thread
+	bool end;
+	// Timeouts
+	unsigned connto, tranfto;
+	// Pipe used to signal select() end, so we can add new requests
+	int pipefd[2];
+
 public:
 
 	// Objects used to upload files (either from buffer or path).
@@ -88,6 +116,13 @@ public:
 		return r;
 	}
 
+	static std::string urlunescape(std::string q) {
+		char *ret = curl_unescape(q.c_str(), q.size());
+		std::string r(ret);
+		curl_free(ret);
+		return r;
+	}
+
 	void doGET(const std::string &url,
 		std::map<std::string, std::string> args,
 		std::function<bool(std::string)> wrcb = nullptr,
@@ -99,47 +134,30 @@ public:
 		if (!argstr.empty())
 			argstr[0] = '?';
 
-		curl_write_function wrapperfn{[]
-			(char *ptr, size_t size, size_t nmemb, void *userdata) -> size_t {
-				// Push data to the user-defined callback if any
-				t_query *q = static_cast<t_query*>(userdata);
-				if (q->wrcb && !q->wrcb(std::string(ptr, size*nmemb)))
-					return 0;
-				return size * nmemb;
-			}
-		};
-
 		CURL *req = curl_easy_init();
 		auto userq = std::make_unique<t_query>();
 		userq->wrcb = wrcb; userq->donecb = donecb;
 		curl_easy_setopt(req, CURLOPT_URL, (url + argstr).c_str());
 		curl_easy_setopt(req, CURLOPT_CONNECTTIMEOUT, connto);
 		curl_easy_setopt(req, CURLOPT_TIMEOUT, tranfto);
-		curl_easy_setopt(req, CURLOPT_WRITEFUNCTION, wrapperfn);
-		curl_easy_setopt(req, CURLOPT_WRITEDATA, userq.get());
 		curl_easy_setopt(req, CURLOPT_FOLLOWLOCATION, 1);
 		curl_easy_setopt(req, CURLOPT_MAXREDIRS, 5);
 
-		// Enqueues a query in the pending queue
-		{
-			std::lock_guard<std::mutex> guard(rqueue_mutex);
-			rqueue[req] = std::move(userq);
-		}
-
-		// Use self-pipe trick to make select return immediately
-		write(pipefd[1], "\0", 1);
+		this->doQuery(req, std::move(userq));
 	}
 
 	void doPOST(const std::string &url,
 		std::map<std::string, std::string> args,
 		std::map<std::string, File> files = {},
 		std::map<std::string, MemFile> memfiles = {},
+		std::function<bool(std::string)> wrcb = nullptr,
 		std::function<void(bool)> donecb = nullptr,
 		std::string userpass = "") {
 
 		struct curl_httppost *lastptr = NULL;
 		auto userq = std::make_unique<t_query>();
 		userq->donecb = donecb;
+		userq->wrcb = wrcb;
 
 		// Add args to forms
 		for (const auto & a : args)
@@ -166,21 +184,30 @@ public:
 			offset += f.second.content.size();
 		}
 
-		curl_write_function donothing{[]
-			(char *ptr, size_t size, size_t nmemb, void *userdata) -> size_t {
-				return size * nmemb;
-			}
-		};
-
 		CURL *req = curl_easy_init();
 		curl_easy_setopt(req, CURLOPT_URL, url.c_str());
 		curl_easy_setopt(req, CURLOPT_CONNECTTIMEOUT, connto);
 		curl_easy_setopt(req, CURLOPT_TIMEOUT, tranfto);
 		curl_easy_setopt(req, CURLOPT_HTTPPOST, userq->form);
-		curl_easy_setopt(req, CURLOPT_WRITEFUNCTION, donothing);
-		curl_easy_setopt(req, CURLOPT_WRITEDATA, NULL);
 		if (!userpass.empty())
 			curl_easy_setopt(req, CURLOPT_USERPWD, userpass.c_str());
+
+		this->doQuery(req, std::move(userq));
+	}
+
+	void doQuery(CURL *req, std::unique_ptr<t_query> userq) {
+		curl_write_function wrapperfn{[]
+			(char *ptr, size_t size, size_t nmemb, void *userdata) -> size_t {
+				// Push data to the user-defined callback if any
+				t_query *q = static_cast<t_query*>(userdata);
+				if (q->wrcb && !q->wrcb(std::string(ptr, size*nmemb)))
+					return 0;
+				return size * nmemb;
+			}
+		};
+
+		curl_easy_setopt(req, CURLOPT_WRITEFUNCTION, wrapperfn);
+		curl_easy_setopt(req, CURLOPT_WRITEDATA, userq.get());
 
 		// Enqueues a query in the pending queue
 		{
@@ -252,34 +279,6 @@ public:
 			}
 		}
 	}
-
-private:
-	class t_query {
-	public:
-		t_query() : form(NULL) {}
-		~t_query() {
-			if (form)
-				curl_formfree(form);
-		}
-		std::function<bool(std::string)> wrcb;  // Write callback (data download)
-		std::function<void(bool)>      donecb;  // End callback with result
-		std::string buffer;                     // Data that's being pushed
-		struct curl_httppost *form;             // Any form post data
-	};
-	// Client thread
-	std::thread worker;
-	// Queue of pending requests to be performed
-	std::map<CURL*, std::unique_ptr<t_query>> rqueue;
-	std::mutex rqueue_mutex;
-	// Multi handlers that is in charge of doing requests.
-	CURLM *multi_handle;
-	std::map<CURL*, std::unique_ptr<t_query>> request_set;
-	// Signal end of thread
-	bool end;
-	// Timeouts
-	unsigned connto, tranfto;
-	// Pipe used to signal select() end, so we can add new requests
-	int pipefd[2];
 };
 
 #endif
