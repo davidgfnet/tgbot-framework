@@ -26,6 +26,7 @@ class GAUpdate {
 protected:
 	uint64_t t;           // Keeps the time logged (ms), since the push might happen some seconds later
 	uint64_t userid;      // User id, to track users
+	std::string lang;     // Language (if set)
 
 	GAUpdate(uint64_t userid) : t(ptimems()), userid(userid), attempts(0) {}
 
@@ -41,6 +42,10 @@ protected:
 public:
 	unsigned attempts;
 
+	void set_lang(const std::string &lang) {
+		this->lang = lang;
+	}
+
 	virtual ~GAUpdate() {}
 
 	virtual std::map<std::string, std::string> serialize() const {
@@ -48,6 +53,7 @@ public:
 			{"v",   "1"},
 			{"cid", std::to_string(userid)},
 			{"qt",  std::to_string(ptimems() - t)},
+			{"ul",  lang},
 		};
 	}
 };
