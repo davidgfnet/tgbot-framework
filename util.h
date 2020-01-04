@@ -29,5 +29,9 @@ std::string basename(std::string fn);
 // TODO: Make it work in non-indoeuropean languages perhaps?
 std::string makeshort(std::string msg, unsigned maxlen);
 
+// Hex conversion functions
+std::string tohex(const std::string & buf);
+std::string fromhex(const std::string &h);
+
 #endif
 

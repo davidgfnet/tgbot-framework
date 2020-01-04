@@ -46,7 +46,7 @@ std::string hsize(uint64_t size) {
 
 std::string trim(const std::string &str) {
 	auto first = str.find_first_not_of(' ');
-    if (std::string::npos == first)
+	if (std::string::npos == first)
 		return {};
 	auto last = str.find_last_not_of(' ');
 	return str.substr(first, (last - first + 1));
@@ -115,4 +115,36 @@ std::string makeshort(std::string msg, unsigned maxlen) {
 	}
 	return msg;
 }
+
+std::string tohex(const std::string & buf) {
+	std::string ret(buf.size() * 2, '\0');
+	static const char *hcharset = "0123456789abcdef";
+	for (unsigned i = 0; i < buf.size(); i++) {
+		uint8_t c = buf[i];
+		ret[i*2+0] = hcharset[c >> 4];
+		ret[i*2+1] = hcharset[c & 15];
+	}
+	return ret;
+}
+
+static inline int hdec(char c) {
+	if (c >= '0' && c <= '9')
+		return c - '0';
+	if (c >= 'a' && c <= 'f')
+		return c - 'a' + 10;
+	if (c >= 'A' && c <= 'F')
+		return c - 'A' + 10;
+	return -1;
+}
+
+std::string fromhex(const std::string &h) {
+	if (h.size() & 1)
+		return {};
+	std::string ret(h.size() >> 1, '\0');
+	for (unsigned i = 0; i < h.size(); i++)
+		ret[i] = (hdec(h[i*2+0]) << 4) | hdec(h[i*2+1]);
+	return ret;
+}
+
+
 
