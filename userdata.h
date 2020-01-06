@@ -14,6 +14,7 @@
 #define MAX_ENT_SHARD  ( (UDATAMEM / SHARDF) / 128 )  // Assuming each entry is around 128 bytes (with overhead)
 
 // Class used to keep user data in memory
+template <typename T>
 class UserData {
 public:
 	UserData() {
@@ -24,25 +25,21 @@ public:
 		for (unsigned i = 0; i < SHARDF; i++)
 			delete user_data_shards[i];
 	}
-	struct t_query {
-		std::string query;
-		uint8_t offset;
-	};
 
-	bool getLastQuery(uint64_t userid, t_query *query) {
+	bool getUserData(uint64_t userid, T *data) {
 		// Acquire the read mutex for the shard
 		unsigned sn = userid % SHARDF;
-		if (user_data_shards[sn]->tryGet(userid, *query))
+		if (user_data_shards[sn]->tryGet(userid, *data))
 			return true;
 		return false;
 	}
-	void updateLastQuery(uint64_t userid, const t_query &query) {
+	void updateUserData(uint64_t userid, const T &data) {
 		// Acquire the write mutex for the shard
 		unsigned sn = userid % SHARDF;
-		user_data_shards[sn]->insert(userid, query);
+		user_data_shards[sn]->insert(userid, data);
 	}
 private:
-	typedef lru11::Cache<uint64_t, t_query, std::mutex> CacheType;
+	typedef lru11::Cache<uint64_t, T, std::mutex> CacheType;
 	std::array<CacheType*, SHARDF> user_data_shards;
 };
 
