@@ -19,13 +19,13 @@ std::string to63(uint64_t n) {
 }
 
 uint64_t from63(std::string s) {
-	uint64_t ret = 0;
-	for (int i = s.size()-1; i >= 0; i--) {
-		ret *= 63;
-		const char *p = strchr(cset, s[i]);
+	uint64_t ret = 0, mul = 1;
+	for (char c : s) {
+		const char *p = strchr(cset, c);
 		if (!p)
 			break;
-		ret += (p - cset);
+		ret += (p - cset) * mul;
+		mul *= 63;
 	}
 	return ret;
 }
