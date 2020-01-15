@@ -23,8 +23,9 @@ uint64_t from63(std::string s) {
 	for (int i = s.size()-1; i >= 0; i--) {
 		ret *= 63;
 		const char *p = strchr(cset, s[i]);
-		if (p)
-			ret += (p - cset);
+		if (!p)
+			break;
+		ret += (p - cset);
 	}
 	return ret;
 }
