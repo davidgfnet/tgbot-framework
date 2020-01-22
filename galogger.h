@@ -9,7 +9,7 @@
 #define _GA_LOGGER_HH__
 
 #include <mutex>
-#include <map>
+#include <unordered_map>
 #include <list>
 #include <thread>
 #include <condition_variable>
@@ -48,7 +48,7 @@ public:
 
 	virtual ~GAUpdate() {}
 
-	virtual std::map<std::string, std::string> serialize() const {
+	virtual std::unordered_multimap<std::string, std::string> serialize() const {
 		return {
 			{"v",   "1"},
 			{"cid", std::to_string(userid)},
@@ -65,12 +65,12 @@ public:
 	GAPageView(uint64_t userid, std::string title, std::string host, std::string path)
 	 : GAUpdate(userid), dt(title), dh(host), dp(path) { }
 
-	std::map<std::string, std::string> serialize() const {
+	std::unordered_multimap<std::string, std::string> serialize() const {
 		auto ret = GAUpdate::serialize();
-		ret["t"] = "pageview";
-		ret["dt"] = dt;
-		ret["dh"] = dh;
-		ret["dp"] = dp;
+		ret.emplace("t", "pageview");
+		ret.emplace("dt", dt);
+		ret.emplace("dh", dh);
+		ret.emplace("dp", dp);
 		return ret;
 	}
 };
@@ -82,11 +82,11 @@ public:
 	GAEvent(uint64_t userid, std::string category, std::string action)
 	 : GAUpdate(userid), ecat(category), eaction(action) { }
 
-	std::map<std::string, std::string> serialize() const {
+	std::unordered_multimap<std::string, std::string> serialize() const {
 		auto ret = GAUpdate::serialize();
-		ret["t"] = "event";
-		ret["ec"] = ecat;
-		ret["ea"] = eaction;
+		ret.emplace("t", "event");
+		ret.emplace("ec", ecat);
+		ret.emplace("ea", eaction);
 		return ret;
 	}
 };
@@ -146,7 +146,7 @@ private:
 
 				// Push via GET request
 				auto args = upd->serialize();
-				args["tid"] = trackingid;
+				args.emplace("tid", trackingid);
 				client.doGET(BASE_GA_URL, args, nullptr,
 					[upd, this] (bool ok) mutable {
 						if (!ok && upd->attempts < 5) {
