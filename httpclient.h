@@ -7,7 +7,7 @@
 #define __HTTP_CLIENT_H__
 
 #include <memory>
-#include <set>
+#include <unordered_map>
 #include <mutex>
 #include <vector>
 #include <thread>
@@ -167,7 +167,7 @@ public:
 	}
 
 	void doGET(const std::string &url,
-		std::map<std::string, std::string> args,
+		std::unordered_multimap<std::string, std::string> args,
 		std::function<bool(std::string)> wrcb = nullptr,
 		std::function<void(bool)> donecb = nullptr) {
 		// Process args
@@ -190,8 +190,8 @@ public:
 	}
 
 	void doPOST(const std::string &url,
-		std::map<std::string, std::string> args,
-		std::map<std::string, UploadFile*> files = {},
+		std::unordered_multimap<std::string, std::string> args,
+		std::unordered_multimap<std::string, UploadFile*> files = {},
 		std::function<bool(std::string)> wrcb = nullptr,
 		std::function<void(bool)> donecb = nullptr,
 		std::string userpass = "") {
