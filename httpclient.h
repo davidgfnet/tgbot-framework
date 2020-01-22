@@ -8,8 +8,12 @@
 
 #include <memory>
 #include <set>
+#include <mutex>
+#include <vector>
+#include <thread>
 #include <functional>
 #include <unistd.h>
+#include <cstring>
 #include <fcntl.h>
 #include <curl/curl.h>
 
@@ -19,6 +23,59 @@
 typedef size_t(*curl_write_function)(char *ptr, size_t size, size_t nmemb, void *userdata);
 
 class HttpClient {
+public:
+// Objects used to upload files (either from buffer or path).
+	class UploadFile {
+	public:
+		UploadFile(std::string name, std::string mimetype)
+		 :name(name), mimetype(mimetype) {}
+		virtual ~UploadFile() {}
+		virtual std::string read(unsigned amount) = 0;
+		virtual size_t size() = 0;
+		std::string name, mimetype;
+	};
+	class DiskFile : public UploadFile {
+	public:
+		~DiskFile() {}
+		DiskFile(std::string name, std::string filepath, std::string mimetype)
+			: UploadFile(name, mimetype), fsize(0)
+		{
+			fd = fopen(filepath.c_str(), "rb");
+			if (fd) {
+				fseek(fd, 0L, SEEK_END);
+				fsize = ftell(fd);
+				fseek(fd, 0L, SEEK_SET);
+			}
+		}
+		virtual std::string read(unsigned amount) {
+			if (fd) {
+				char tmp[8192];
+				unsigned toread = std::min(amount, 8192U);
+				size_t bgot = fread(tmp, 1, toread, fd);
+				if (bgot > 0)
+					return std::string(&tmp[0], bgot);
+			}
+			return {};
+		}
+		virtual size_t size() { return fsize; }
+		FILE * fd;
+		unsigned fsize;
+	};
+	class MemFile : public UploadFile {
+	public:
+		~MemFile() {}
+		MemFile(std::string name, std::string content, std::string mimetype)
+			: UploadFile(name, mimetype), content(content), offset(0) {}
+		virtual std::string read(unsigned amount) {
+			std::string ret = content.substr(offset, amount);
+			offset += ret.size();
+			return ret;
+		}
+		virtual size_t size() { return content.size(); }
+		std::string content;
+		unsigned offset;
+	};
+
 private:
 	class t_query {
 	public:
@@ -29,8 +86,8 @@ private:
 		}
 		std::function<bool(std::string)> wrcb;  // Write callback (data download)
 		std::function<void(bool)>      donecb;  // End callback with result
-		std::string buffer;                     // Data that's being pushed
 		struct curl_httppost *form;             // Any form post data
+		std::vector<std::unique_ptr<UploadFile>> files;  // Keep files around
 	};
 	// Client thread
 	std::thread worker;
@@ -48,20 +105,6 @@ private:
 	int pipefd[2];
 
 public:
-
-	// Objects used to upload files (either from buffer or path).
-	class File {
-	public:
-		File(std::string name, std::string filepath, std::string mimetype)
-			: name(name), filepath(filepath), mimetype(mimetype) {}
-		std::string name, filepath, mimetype;
-	};
-	class MemFile {
-	public:
-		MemFile(std::string name, std::string content, std::string mimetype)
-			: name(name), content(content), mimetype(mimetype) {}
-		std::string name, content, mimetype;
-	};
 
 	HttpClient(unsigned connto = CONNECT_TIMEOUT, unsigned tranfto = TRANSFER_TIMEOUT)
 		: multi_handle(curl_multi_init()), end(false), connto(connto), tranfto(tranfto) {
@@ -148,8 +191,7 @@ public:
 
 	void doPOST(const std::string &url,
 		std::map<std::string, std::string> args,
-		std::map<std::string, File> files = {},
-		std::map<std::string, MemFile> memfiles = {},
+		std::map<std::string, UploadFile*> files = {},
 		std::function<bool(std::string)> wrcb = nullptr,
 		std::function<void(bool)> donecb = nullptr,
 		std::string userpass = "") {
@@ -164,30 +206,33 @@ public:
 			curl_formadd(&userq->form, &lastptr,
 				         CURLFORM_COPYNAME, a.first.c_str(),
 				         CURLFORM_COPYCONTENTS, a.second.c_str(), CURLFORM_END);
-		// Add files and memfiles
-		for (const auto & f : files)
+		// Add files (diskfiles and memfiles)
+		for (auto & f : files) {
 			curl_formadd(&userq->form, &lastptr,
 				         CURLFORM_COPYNAME, f.first.c_str(),
-				         CURLFORM_FILE, f.second.filepath.c_str(),
-				         CURLFORM_CONTENTTYPE, f.second.mimetype.c_str(),
-				         CURLFORM_FILENAME, f.second.name.c_str(), CURLFORM_END);
-		for (const auto & f : memfiles)
-			userq->buffer += f.second.content;
-		unsigned offset = 0;
-		for (const auto & f : memfiles) {
-			curl_formadd(&userq->form, &lastptr,
-				         CURLFORM_COPYNAME, f.first.c_str(),
-				         CURLFORM_BUFFERPTR, &userq->buffer[offset],
-			             CURLFORM_BUFFERLENGTH, f.second.content.size(),
-				         CURLFORM_CONTENTTYPE, f.second.mimetype.c_str(),
-				         CURLFORM_FILENAME, f.second.name.c_str(), CURLFORM_END);
-			offset += f.second.content.size();
+				         CURLFORM_CONTENTTYPE, f.second->mimetype.c_str(),
+				         CURLFORM_CONTENTLEN, f.second->size(),
+			             CURLFORM_STREAM, (void*)f.second,
+				         CURLFORM_FILENAME, f.second->name.c_str(), CURLFORM_END);
+			userq->files.emplace_back(f.second);
 		}
 
+		curl_write_function wrapperfn{[]
+			(char *ptr, size_t size, size_t nmemb, void *userdata) -> size_t {
+				// Just keep calling read() with the right amount and memcpy it
+				UploadFile *f = static_cast<UploadFile*>(userdata);
+				std::string data = f->read(size * nmemb);
+				memcpy(ptr, data.c_str(), data.size());
+				return data.size();
+			}
+		};
+
 		CURL *req = curl_easy_init();
+		curl_easy_setopt(req, CURLOPT_POST, 1);
 		curl_easy_setopt(req, CURLOPT_URL, url.c_str());
 		curl_easy_setopt(req, CURLOPT_CONNECTTIMEOUT, connto);
 		curl_easy_setopt(req, CURLOPT_TIMEOUT, tranfto);
+		curl_easy_setopt(req, CURLOPT_READFUNCTION, wrapperfn);
 		curl_easy_setopt(req, CURLOPT_HTTPPOST, userq->form);
 		if (!userpass.empty())
 			curl_easy_setopt(req, CURLOPT_USERPWD, userpass.c_str());
@@ -265,6 +310,7 @@ public:
 			while ((msg = curl_multi_info_read(multi_handle, &msgs_left))) {
 				if (msg->msg == CURLMSG_DONE) {
 					CURL *h = msg->easy_handle;
+					bool okcode = (msg->data.result == CURLE_OK);
 					curl_multi_remove_handle(multi_handle, h);
 					curl_easy_cleanup(h);
 
@@ -272,7 +318,7 @@ public:
 					if (request_set.count(h)) {
 						const auto &uq = request_set.at(h);
 						if (uq->donecb)
-							uq->donecb(msg->data.result == CURLE_OK);
+							uq->donecb(okcode);
 						request_set.erase(h);
 					}
 				}
