@@ -182,7 +182,8 @@ public:
 
 		CURL *req = curl_easy_init();
 		auto userq = std::make_unique<t_query>();
-		userq->wrcb = wrcb; userq->donecb = donecb;
+		userq->wrcb = std::move(wrcb);
+		userq->donecb = std::move(donecb);
 		curl_easy_setopt(req, CURLOPT_URL, (url + argstr).c_str());
 		curl_easy_setopt(req, CURLOPT_CONNECTTIMEOUT, connto);
 		curl_easy_setopt(req, CURLOPT_TIMEOUT, tranfto);
@@ -201,8 +202,8 @@ public:
 
 		struct curl_httppost *lastptr = NULL;
 		auto userq = std::make_unique<t_query>();
-		userq->donecb = donecb;
-		userq->wrcb = wrcb;
+		userq->donecb = std::move(donecb);
+		userq->wrcb = std::move(wrcb);
 
 		// Add args to forms
 		for (const auto & a : args)

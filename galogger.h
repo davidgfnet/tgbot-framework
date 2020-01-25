@@ -12,6 +12,7 @@
 #include <unordered_map>
 #include <list>
 #include <thread>
+#include <memory>
 #include <condition_variable>
 
 #include "httpclient.h"
@@ -114,7 +115,7 @@ public:
 	void push_event(GAUpdate *event) {
 		// Add line to memory buffer
 		std::lock_guard<std::mutex> guard(mu);
-		event_queue.push_back(event);
+		event_queue.emplace_back(event);
 
 		// Tell flusher to flush this (lazily)
 		waitcond.notify_all();
@@ -124,54 +125,44 @@ private:
 
 	void pusher_thread() {
 		// Keeps pushing data to the GA frontend as long as there's some in the queue
-		while (true) {
+		while (!end) {
 			std::unique_lock<std::mutex> lock(waitmu);
 			waitcond.wait(lock);
 
-			bool empty;
-			{
-				std::lock_guard<std::mutex> guard(mu);
-				empty = event_queue.empty();
-			}
-
-			while (!empty) {
-				// Read buffer we want ot write
-				GAUpdate* upd;
+			std::shared_ptr<GAUpdate> upd;
+			do {
+				upd.reset();
 				{
 					std::lock_guard<std::mutex> guard(mu);
-					upd = event_queue.front();
-					event_queue.pop_front();
-					empty = event_queue.empty();
+					if (!event_queue.empty()) {
+						upd = std::move(event_queue.front());
+						event_queue.pop_front();
+					}
 				}
 
-				// Push via GET request
-				auto args = upd->serialize();
-				args.emplace("tid", trackingid);
-				client.doGET(BASE_GA_URL, args, nullptr,
-					[upd, this] (bool ok) mutable {
-						if (!ok && upd->attempts < 5) {
-							// Failed! Let's retry, to simplify things just add to queue again
-							std::lock_guard<std::mutex> guard(this->mu);
-							upd->attempts++;
-							this->event_queue.push_back(upd);
+				if (upd) {
+					// Push via GET request
+					auto args = upd->serialize();
+					args.emplace("tid", trackingid);
+					client.doGET(BASE_GA_URL, args, nullptr,
+						[upd, this] (bool ok) mutable {
+							if (!ok && upd->attempts < 5) {
+								// Failed! Let's retry, to simplify things just add to queue again
+								std::lock_guard<std::mutex> guard(this->mu);
+								upd->attempts++;
+								this->event_queue.push_back(std::move(upd));
+							}
 						}
-						else {
-							// Completed or too many retries, delete req
-							delete upd;
-						}
-					}
-				);
-			}
-
-			if (end)
-				break;
+					);
+				}
+			} while (upd && !end);
 		}
 	}
 
 	std::string trackingid;
 
 	// Mutex protected queue and http client
-	std::list<GAUpdate*> event_queue;
+	std::list<std::shared_ptr<GAUpdate>> event_queue;
 	HttpClient client;
 	std::mutex mu;
 
