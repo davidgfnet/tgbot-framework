@@ -36,7 +36,10 @@ public:
 	};
 	class DiskFile : public UploadFile {
 	public:
-		~DiskFile() {}
+		~DiskFile() {
+			if (fd)
+				fclose(fd);
+		}
 		DiskFile(std::string name, std::string filepath, std::string mimetype)
 			: UploadFile(name, mimetype), fsize(0)
 		{
