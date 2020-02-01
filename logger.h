@@ -6,6 +6,7 @@
 
 #include <mutex>
 #include <ctime>
+#include <condition_variable>
 
 static std::time_t last_midnight() {
 	std::time_t t = std::time(NULL);
