@@ -7,6 +7,7 @@ std::string hsize(uint64_t size);
 
 // Convert to and from base63
 std::string to63(uint64_t n);
+std::string to63(uint64_t n, unsigned digits);
 uint64_t from63(std::string s);
 
 // Trims spaces and stuff from both sides

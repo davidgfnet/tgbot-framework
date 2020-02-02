@@ -18,6 +18,15 @@ std::string to63(uint64_t n) {
 	return ret;
 }
 
+std::string to63(uint64_t n, unsigned digits) {
+	std::string ret;
+	while (digits--) {
+		ret += cset[n % 63];
+		n /= 63;
+	}
+	return ret;
+}
+
 uint64_t from63(std::string s) {
 	uint64_t ret = 0, mul = 1;
 	for (char c : s) {
