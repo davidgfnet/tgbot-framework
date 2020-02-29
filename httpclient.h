@@ -193,6 +193,7 @@ public:
 		curl_easy_setopt(req, CURLOPT_CONNECTTIMEOUT, connto);
 		curl_easy_setopt(req, CURLOPT_TIMEOUT, tranfto);
 		curl_easy_setopt(req, CURLOPT_FOLLOWLOCATION, 1);
+		curl_easy_setopt(req, CURLOPT_AUTOREFERER, 1L);
 		curl_easy_setopt(req, CURLOPT_MAXREDIRS, 5);
 
 		this->doQuery(req, std::move(userq));
