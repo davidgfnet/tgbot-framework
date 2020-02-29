@@ -272,8 +272,11 @@ public:
 
 		curl_easy_setopt(req, CURLOPT_WRITEFUNCTION, wrapperfn);
 		curl_easy_setopt(req, CURLOPT_WRITEDATA, userq.get());
-		curl_easy_setopt(req, CURLOPT_XFERINFOFUNCTION, progfn);
-		curl_easy_setopt(req, CURLOPT_XFERINFODATA, userq.get());
+		if (progfn) {
+			curl_easy_setopt(req, CURLOPT_XFERINFOFUNCTION, progfn);
+			curl_easy_setopt(req, CURLOPT_XFERINFODATA, userq.get());
+			curl_easy_setopt(req, CURLOPT_NOPROGRESS, 0);
+		}
 
 		// Enqueues a query in the pending queue
 		{
