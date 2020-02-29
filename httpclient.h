@@ -91,7 +91,7 @@ private:
 		}
 		std::function<bool(std::string)> wrcb;  // Write callback (data download)
 		std::function<void(bool)>      donecb;  // End callback with result
-		std::function<void(uint64_t, uint64_t, uint64_t, uint64_t)> pgcb;  // Upload/Download progress callback
+		std::function<void(unsigned, unsigned)> pgcb;  // Upload/Download % progress callback
 		struct curl_httppost *form;             // Any form post data
 		std::vector<std::unique_ptr<UploadFile>> files;  // Keep files around
 	};
@@ -176,7 +176,7 @@ public:
 		std::unordered_multimap<std::string, std::string> args,
 		std::function<bool(std::string)> wrcb = nullptr,
 		std::function<void(bool)> donecb = nullptr,
-		std::function<void(uint64_t, uint64_t, uint64_t, uint64_t)> progcb = nullptr) {
+		std::function<void(unsigned, unsigned)> progcb = nullptr) {
 		// Process args
 		std::string argstr;
 		for (auto arg : args)
@@ -265,7 +265,7 @@ public:
 			 curl_off_t ultotal, curl_off_t ulnow) -> int {
 				t_query *q = static_cast<t_query*>(ptr);
 				if (q->pgcb)
-					q->pgcb(dltotal, dlnow, ultotal, ulnow);
+					q->pgcb((dlnow * 1000) / (dltotal ?: 1), (ulnow * 1000) / (ultotal ?: 1));
 				return 0;
 			}
 		};
