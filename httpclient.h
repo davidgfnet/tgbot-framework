@@ -21,6 +21,8 @@
 #define TRANSFER_TIMEOUT   60   // Abort after a minute, not even uploads are that slow
 
 typedef size_t(*curl_write_function)(char *ptr, size_t size, size_t nmemb, void *userdata);
+typedef int (*curl_progress_function)(void *clientp, curl_off_t dltotal, curl_off_t dlnow, 
+                                      curl_off_t ultotal, curl_off_t ulnow);
 
 class HttpClient {
 public:
@@ -89,6 +91,7 @@ private:
 		}
 		std::function<bool(std::string)> wrcb;  // Write callback (data download)
 		std::function<void(bool)>      donecb;  // End callback with result
+		std::function<void(uint64_t, uint64_t, uint64_t, uint64_t)> pgcb;  // Upload/Download progress callback
 		struct curl_httppost *form;             // Any form post data
 		std::vector<std::unique_ptr<UploadFile>> files;  // Keep files around
 	};
@@ -172,7 +175,8 @@ public:
 	void doGET(const std::string &url,
 		std::unordered_multimap<std::string, std::string> args,
 		std::function<bool(std::string)> wrcb = nullptr,
-		std::function<void(bool)> donecb = nullptr) {
+		std::function<void(bool)> donecb = nullptr,
+		std::function<void(uint64_t, uint64_t, uint64_t, uint64_t)> progcb = nullptr) {
 		// Process args
 		std::string argstr;
 		for (auto arg : args)
@@ -184,6 +188,7 @@ public:
 		auto userq = std::make_unique<t_query>();
 		userq->wrcb = std::move(wrcb);
 		userq->donecb = std::move(donecb);
+		userq->pgcb = std::move(progcb);
 		curl_easy_setopt(req, CURLOPT_URL, (url + argstr).c_str());
 		curl_easy_setopt(req, CURLOPT_CONNECTTIMEOUT, connto);
 		curl_easy_setopt(req, CURLOPT_TIMEOUT, tranfto);
@@ -255,8 +260,20 @@ public:
 			}
 		};
 
+		curl_progress_function progfn{[]
+			(void *ptr, curl_off_t dltotal, curl_off_t dlnow,
+			 curl_off_t ultotal, curl_off_t ulnow) -> int {
+				t_query *q = static_cast<t_query*>(ptr);
+				if (q->pgcb)
+					q->pgcb(dltotal, dlnow, ultotal, ulnow);
+				return 0;
+			}
+		};
+
 		curl_easy_setopt(req, CURLOPT_WRITEFUNCTION, wrapperfn);
 		curl_easy_setopt(req, CURLOPT_WRITEDATA, userq.get());
+		curl_easy_setopt(req, CURLOPT_XFERINFOFUNCTION, progfn);
+		curl_easy_setopt(req, CURLOPT_XFERINFODATA, userq.get());
 
 		// Enqueues a query in the pending queue
 		{
