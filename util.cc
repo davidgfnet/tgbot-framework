@@ -156,5 +156,14 @@ std::string fromhex(const std::string &h) {
 	return ret;
 }
 
-
+std::vector<std::string> strsplit(const std::string &s, char c) {
+	std::vector<std::string> ret;
+	size_t p = 0, ps = 0;
+	while ((p = s.find(c, ps)) != std::string::npos) {
+		ret.push_back(s.substr(ps, p - ps));
+		ps = p + 1;
+	}
+	ret.push_back(s.substr(ps));
+	return ret;
+}
 

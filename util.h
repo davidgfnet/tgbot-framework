@@ -2,8 +2,15 @@
 #ifndef _UTIL__HH___
 #define _UTIL__HH___
 
+#include <stdint.h>
+#include <string>
+#include <vector>
+
 // Creates a human-readable file size from byte count
 std::string hsize(uint64_t size);
+
+// Splits a string into chunks
+std::vector<std::string> strsplit(const std::string &s, char c);
 
 // Convert to and from base63
 std::string to63(uint64_t n);
