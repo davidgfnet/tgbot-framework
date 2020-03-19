@@ -87,7 +87,7 @@ std::string urienc(std::string s) {
 std::string mdescape(std::string s) {
 	std::string ret;
 	for (char c : s) {
-		if (c == '_' || c == '*' || c == '[' || c == ']' || c == '`')
+		if (c == '_' || c == '*' || c == '[' || c == '`')
 			ret += '\\';
 		ret += c;
 	}

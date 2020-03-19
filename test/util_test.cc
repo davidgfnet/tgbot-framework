@@ -38,5 +38,9 @@ int main() {
 
 	// URL encoding
 	assert(urienc("https://foobar?a=123+456") == "https%3a%2f%2ffoobar%3fa%3d123%2b456");
+
+	// Markdown escape
+	assert(mdescape("foo bar") == "foo bar");
+	assert(mdescape("_foo_ [bar]") == "\\_foo\\_ \\[bar]");
 }
 
