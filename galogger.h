@@ -95,7 +95,7 @@ public:
 class GoogleAnalyticsLogger {
 public:
 	GoogleAnalyticsLogger(std::string trackingid)
-	 : trackingid(trackingid) {
+	 : trackingid(trackingid), successful_hits(0), failed_hits(0) {
 		// Spawn a thread to push events, hopefully enough
 		writerth = std::thread(&GoogleAnalyticsLogger::pusher_thread, this);
 	}
@@ -119,6 +119,16 @@ public:
 
 		// Tell flusher to flush this (lazily)
 		waitcond.notify_all();
+	}
+
+	unsigned getSuccessfulHits() const {
+		std::lock_guard<std::mutex> guard(this->mu);
+		return successful_hits;
+	}
+
+	unsigned getFailedHits() const {
+		std::lock_guard<std::mutex> guard(this->mu);
+		return failed_hits;
 	}
 
 private:
@@ -146,9 +156,13 @@ private:
 					args.emplace("tid", trackingid);
 					client.doGET(BASE_GA_URL, args, nullptr,
 						[upd, this] (bool ok) mutable {
-							if (!ok && upd->attempts < 5) {
+							std::lock_guard<std::mutex> guard(this->mu);
+							if (ok)
+								successful_hits++;
+							else if (upd->attempts >= 5)
+								failed_hits++;    // Just drop it!
+							else {
 								// Failed! Let's retry, to simplify things just add to queue again
-								std::lock_guard<std::mutex> guard(this->mu);
 								upd->attempts++;
 								this->event_queue.push_back(std::move(upd));
 							}
@@ -160,15 +174,16 @@ private:
 	}
 
 	std::string trackingid;
+	unsigned successful_hits, failed_hits;
 
 	// Mutex protected queue and http client
 	std::list<std::shared_ptr<GAUpdate>> event_queue;
 	HttpClient client;
-	std::mutex mu;
+	mutable std::mutex mu;
 
 	// Thread that sits in the background flushing stuff
 	std::thread writerth;
-	std::mutex waitmu;
+	mutable std::mutex waitmu;
 	std::condition_variable waitcond;
 	bool end = false;
 };
