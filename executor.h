@@ -1,6 +1,9 @@
 
 // Created by David Guillen Fandos <david@davidgf.net> 2019
 
+#ifndef __PROC_EXECUTOR_H__
+#define __PROC_EXECUTOR_H__
+
 #include <list>
 #include <mutex>
 #include <atomic>
@@ -95,4 +98,6 @@ public:
 			t_exec{.exec = executable, .args = args, .cb = cb});
 	}
 };
+
+#endif
 

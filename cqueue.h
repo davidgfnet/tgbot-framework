@@ -1,6 +1,9 @@
 
 // Created by David Guillen Fandos <david@davidgf.net> 2019
 
+#ifndef __CONCURRENT_QUEUE_HH__
+#define __CONCURRENT_QUEUE_HH__
+
 #include <list>
 #include <atomic>
 #include <mutex>
@@ -44,4 +47,6 @@ private:
 	std::condition_variable condvar; // Wait variable
 	std::atomic<bool> nowriter;      // Indicates no more writes will happen
 };
+
+#endif
 
