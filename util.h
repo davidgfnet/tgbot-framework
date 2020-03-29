@@ -29,6 +29,8 @@ std::string urienc(std::string s);
 // Escapes Markdown strings, telegram is a bit picky :)
 std::string mdescape(std::string s);
 std::string charescape(std::string s, char r);
+// HTML escaping
+std::string htmlescape(std::string s);
 
 // Get the filename given a path
 std::string basename(std::string fn);

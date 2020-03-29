@@ -94,6 +94,23 @@ std::string mdescape(std::string s) {
 	return ret;
 }
 
+std::string htmlescape(std::string s) {
+	std::string ret; ret.reserve(s.size() + 64);
+	for (char c : s) {
+		if (c == '<')
+			ret += "&lt;";
+		else if (c == '>')
+			ret += "&gt;";
+		else if (c == '&')
+			ret += "&amp;";
+		else if (c == '"')
+			ret += "&quot;";
+		else
+			ret.push_back(c);
+	}
+	return ret;
+}
+
 std::string charescape(std::string s, char r) {
 	std::string ret;
 	for (char c : s) {

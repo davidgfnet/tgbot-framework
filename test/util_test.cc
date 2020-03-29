@@ -43,5 +43,8 @@ int main() {
 	// Markdown escape
 	assert(mdescape("foo bar") == "foo bar");
 	assert(mdescape("_foo_ [bar]") == "\\_foo\\_ \\[bar]");
+
+	// HTML escape
+	assert(htmlescape("<a> foo & \"lol\"") == "&lt;a&gt; foo &amp; &quot;lol&quot;");
 }
 
