@@ -151,7 +151,7 @@ std::string fromhex(const std::string &h) {
 	if (h.size() & 1)
 		return {};
 	std::string ret(h.size() >> 1, '\0');
-	for (unsigned i = 0; i < h.size(); i++)
+	for (unsigned i = 0; i < ret.size(); i++)
 		ret[i] = (hdec(h[i*2+0]) << 4) | hdec(h[i*2+1]);
 	return ret;
 }

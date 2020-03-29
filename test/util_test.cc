@@ -35,6 +35,7 @@ int main() {
 	assert(fromhex(tohex("123")) == "123");
 	assert(fromhex("ff") == "\xff");
 	assert(fromhex("F0") == "\xf0");
+	assert(fromhex("41424344454647484142434445464748") == "ABCDEFGHABCDEFGH");
 
 	// URL encoding
 	assert(urienc("https://foobar?a=123+456") == "https%3a%2f%2ffoobar%3fa%3d123%2b456");
