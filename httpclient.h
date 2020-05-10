@@ -135,7 +135,7 @@ public:
 		end = true;
 
 		// Unblock the thread
-		write(pipefd[1], "\0", 1);
+		(void)write(pipefd[1], "\0", 1);
 
 		// Now detroy the thread
 		worker.join();
@@ -286,7 +286,7 @@ public:
 		}
 
 		// Use self-pipe trick to make select return immediately
-		write(pipefd[1], "\0", 1);
+		(void)write(pipefd[1], "\0", 1);
 	}
 
 	// Will process http client requests
@@ -325,7 +325,7 @@ public:
 			select(maxfd+1, &rd, &wr, &er, &timeout);
 
 			char tmp[1024];
-			read(pipefd[0], tmp, sizeof(tmp));
+			(void)read(pipefd[0], tmp, sizeof(tmp));
 
 			while (CURLM_CALL_MULTI_PERFORM == curl_multi_perform(multi_handle, &nbLeft));
 
