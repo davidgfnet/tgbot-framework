@@ -189,14 +189,30 @@ public:
 		userq->wrcb = std::move(wrcb);
 		userq->donecb = std::move(donecb);
 		userq->pgcb = std::move(progcb);
-		curl_easy_setopt(req, CURLOPT_URL, (url + argstr).c_str());
-		curl_easy_setopt(req, CURLOPT_CONNECTTIMEOUT, connto);
-		curl_easy_setopt(req, CURLOPT_TIMEOUT, tranfto);
 		curl_easy_setopt(req, CURLOPT_FOLLOWLOCATION, 1);
 		curl_easy_setopt(req, CURLOPT_AUTOREFERER, 1L);
 		curl_easy_setopt(req, CURLOPT_MAXREDIRS, 5);
 
-		this->doQuery(req, std::move(userq));
+		this->doQuery(req, url + argstr, std::move(userq));
+	}
+
+	void doPOST(const std::string &url,
+		std::string post_data,
+		std::function<bool(std::string)> wrcb = nullptr,
+		std::function<void(bool)> donecb = nullptr,
+		std::string userpass = "") {
+
+		auto userq = std::make_unique<t_query>();
+		userq->wrcb = std::move(wrcb);
+		userq->donecb = std::move(donecb);
+
+		CURL *req = curl_easy_init();
+		curl_easy_setopt(req, CURLOPT_POST, 1);
+		curl_easy_setopt(req, CURLOPT_COPYPOSTFIELDS, post_data.c_str());
+		if (!userpass.empty())
+			curl_easy_setopt(req, CURLOPT_USERPWD, userpass.c_str());
+
+		this->doQuery(req, url, std::move(userq));
 	}
 
 	void doPOST(const std::string &url,
@@ -239,18 +255,15 @@ public:
 
 		CURL *req = curl_easy_init();
 		curl_easy_setopt(req, CURLOPT_POST, 1);
-		curl_easy_setopt(req, CURLOPT_URL, url.c_str());
-		curl_easy_setopt(req, CURLOPT_CONNECTTIMEOUT, connto);
-		curl_easy_setopt(req, CURLOPT_TIMEOUT, tranfto);
 		curl_easy_setopt(req, CURLOPT_READFUNCTION, wrapperfn);
 		curl_easy_setopt(req, CURLOPT_HTTPPOST, userq->form);
 		if (!userpass.empty())
 			curl_easy_setopt(req, CURLOPT_USERPWD, userpass.c_str());
 
-		this->doQuery(req, std::move(userq));
+		this->doQuery(req, url, std::move(userq));
 	}
 
-	void doQuery(CURL *req, std::unique_ptr<t_query> userq) {
+	void doQuery(CURL *req, std::string url, std::unique_ptr<t_query> userq) {
 		curl_write_function wrapperfn{[]
 			(char *ptr, size_t size, size_t nmemb, void *userdata) -> size_t {
 				// Push data to the user-defined callback if any
@@ -271,6 +284,9 @@ public:
 			}
 		};
 
+		curl_easy_setopt(req, CURLOPT_URL, url.c_str());
+		curl_easy_setopt(req, CURLOPT_CONNECTTIMEOUT, connto);
+		curl_easy_setopt(req, CURLOPT_TIMEOUT, tranfto);
 		curl_easy_setopt(req, CURLOPT_WRITEFUNCTION, wrapperfn);
 		curl_easy_setopt(req, CURLOPT_WRITEDATA, userq.get());
 		if (progfn) {

@@ -13,11 +13,14 @@
 #include <list>
 #include <thread>
 #include <memory>
+#include <iterator>
 #include <condition_variable>
 
 #include "httpclient.h"
 
-#define BASE_GA_URL "https://www.google-analytics.com/collect"
+#define PUSH_TIMEOUT  std::chrono::seconds(10)
+#define PUSH_COUNT    size_t(20)
+#define BASE_GA_URL   "https://www.google-analytics.com/batch"
 
 // Event to push:
 // Exceptions have a type, to track errors reported to the user (or internal errors too).
@@ -133,43 +136,61 @@ public:
 
 private:
 
+	std::string serialize_hit(std::unordered_multimap<std::string, std::string> args) {
+		std::string ret;
+		for (auto it : args)
+			ret += it.first + "=" + HttpClient::urlescape(it.second) + "&";
+		ret.pop_back();
+		return ret;
+	}
+
 	void pusher_thread() {
 		// Keeps pushing data to the GA frontend as long as there's some in the queue
 		while (!end) {
 			std::unique_lock<std::mutex> lock(waitmu);
-			waitcond.wait(lock);
+			bool tout = std::cv_status::timeout == waitcond.wait_until(
+				lock, std::chrono::system_clock::now() + PUSH_TIMEOUT);
 
-			std::shared_ptr<GAUpdate> upd;
+			std::list<std::shared_ptr<GAUpdate>> upd;
 			do {
-				upd.reset();
+				upd.clear();
 				{
 					std::lock_guard<std::mutex> guard(mu);
-					if (!event_queue.empty()) {
-						upd = std::move(event_queue.front());
-						event_queue.pop_front();
+					if (event_queue.size() > PUSH_COUNT || tout) {
+						// Extract up to PUSH_COUNT elements to be pushed
+						upd.splice(upd.begin(), event_queue, event_queue.begin(),
+							std::next(event_queue.begin(), std::min(PUSH_COUNT, event_queue.size())));
 					}
 				}
 
-				if (upd) {
-					// Push via GET request
-					auto args = upd->serialize();
-					args.emplace("tid", trackingid);
-					client.doGET(BASE_GA_URL, args, nullptr,
+				if (!upd.empty()) {
+					// Push via batch POST request
+					std::string payload;
+					for (auto hit : upd) {
+						auto args = hit->serialize();
+						args.emplace("tid", trackingid);
+						payload += serialize_hit(args) + "\n";
+					}
+					client.doPOST(BASE_GA_URL, payload, nullptr,
 						[upd, this] (bool ok) mutable {
 							std::lock_guard<std::mutex> guard(this->mu);
 							if (ok)
 								successful_hits++;
-							else if (upd->attempts >= 5)
-								failed_hits++;    // Just drop it!
 							else {
-								// Failed! Let's retry, to simplify things just add to queue again
-								upd->attempts++;
-								this->event_queue.push_back(std::move(upd));
+								for (auto elem : upd) {
+									if (elem->attempts >= 5)
+										failed_hits++;    // Just drop it!
+									else {
+										// Failed! Let's retry, to simplify things just add to queue again
+										elem->attempts++;
+										this->event_queue.push_back(elem);
+									}
+								}
 							}
 						}
 					);
 				}
-			} while (upd && !end);
+			} while (!upd.empty() && !end);
 		}
 	}
 
