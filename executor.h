@@ -57,12 +57,13 @@ private:
 	void launch(t_exec ex) {
 		pid_t child = fork();
 		if (child) {
-			// Adjust niceness
-			nice(this->niceadj);
 			// Add the t_exec in the map, indexed by PID
 			ongoing[child] = ex;
 		}
 		else {
+			// Adjust niceness
+			nice(this->niceadj);
+
 			// We are the children, execv!
 			char const *args[ex.args.size()+1] = {0};
 			for (unsigned i = 0; i < ex.args.size(); i++)
