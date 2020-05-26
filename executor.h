@@ -57,6 +57,8 @@ private:
 	void launch(t_exec ex) {
 		pid_t child = fork();
 		if (child) {
+			// Adjust niceness
+			nice(this->niceadj);
 			// Add the t_exec in the map, indexed by PID
 			ongoing[child] = ex;
 		}
@@ -74,13 +76,14 @@ private:
 	std::list<t_exec> queue;
 	std::unordered_map<pid_t, t_exec> ongoing;
 	unsigned inflight, maxinflight;
+	unsigned niceadj;
 	std::atomic<bool> end;
 	std::mutex queue_mutex;
 	std::thread worker;
 
 public:
-	Executor(unsigned maxinflight)
-	:inflight(0), maxinflight(maxinflight), end(false) {
+	Executor(unsigned maxinflight, unsigned niceadj = 0)
+	:inflight(0), maxinflight(maxinflight), niceadj(niceadj), end(false) {
 		worker = std::thread(&Executor::work, this);
 	}
 
