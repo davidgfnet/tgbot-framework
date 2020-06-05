@@ -289,6 +289,7 @@ public:
 		curl_easy_setopt(req, CURLOPT_TIMEOUT, tranfto);
 		curl_easy_setopt(req, CURLOPT_WRITEFUNCTION, wrapperfn);
 		curl_easy_setopt(req, CURLOPT_WRITEDATA, userq.get());
+		curl_easy_setopt(req, CURLOPT_HTTP_VERSION, CURL_HTTP_VERSION_1_1);
 		if (progfn) {
 			curl_easy_setopt(req, CURLOPT_XFERINFOFUNCTION, progfn);
 			curl_easy_setopt(req, CURLOPT_XFERINFODATA, userq.get());
