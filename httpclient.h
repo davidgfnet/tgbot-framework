@@ -12,6 +12,7 @@
 #include <vector>
 #include <thread>
 #include <functional>
+#include <future>
 #include <unistd.h>
 #include <cstring>
 #include <fcntl.h>
@@ -170,6 +171,23 @@ public:
 		std::string r(ret);
 		curl_free(ret);
 		return r;
+	}
+
+	std::pair<bool, std::string> get(const std::string &url,
+		std::unordered_multimap<std::string, std::string> args) {
+
+		// Use the async interface and block until ready
+		std::string response;
+		std::promise<bool> p;
+		this->doGET(url, args,
+			[&response] (std::string chunk) -> bool {
+				response += chunk;
+				return true;
+			},
+			[&p] (bool success) {
+				p.set_value(success);
+			});
+		return {p.get_future().get(), response};
 	}
 
 	void doGET(const std::string &url,
