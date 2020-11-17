@@ -85,15 +85,18 @@ public:
 private:
 	class t_query {
 	public:
-		t_query() : form(NULL) {}
+		t_query() : form(NULL), headers(NULL) {}
 		~t_query() {
 			if (form)
 				curl_formfree(form);
+			if (headers)
+				curl_slist_free_all(headers);
 		}
 		std::function<bool(std::string)> wrcb;  // Write callback (data download)
 		std::function<void(bool)>      donecb;  // End callback with result
 		std::function<void(unsigned, unsigned)> pgcb;  // Upload/Download % progress callback
 		struct curl_httppost *form;             // Any form post data
+		struct curl_slist *headers;             // Any needed headers
 		std::vector<std::unique_ptr<UploadFile>> files;  // Keep files around
 	};
 	// Client thread
@@ -313,6 +316,10 @@ public:
 			curl_easy_setopt(req, CURLOPT_XFERINFODATA, userq.get());
 			curl_easy_setopt(req, CURLOPT_NOPROGRESS, 0);
 		}
+
+		// Disable 100 continue requests
+		userq->headers = curl_slist_append(userq->headers, "Expect:");
+		curl_easy_setopt(req, CURLOPT_HTTPHEADER, userq->headers);
 
 		// Enqueues a query in the pending queue
 		{
