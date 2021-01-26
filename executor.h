@@ -1,10 +1,11 @@
 
-// Created by David Guillen Fandos <david@davidgf.net> 2019
+// Created by David Guillen Fandos <david@davidgf.net> 2020
 
 #ifndef __PROC_EXECUTOR_H__
 #define __PROC_EXECUTOR_H__
 
 #include <list>
+#include <vector>
 #include <mutex>
 #include <atomic>
 #include <thread>
@@ -46,9 +47,15 @@ private:
 			else {
 				// Lookup the pid and call the callback
 				if (ongoing.count(ret)) {
-					inflight--;
-					ongoing[ret].cb(status);
+					// Callback could be null
+					auto & cb = ongoing[ret].cb;
+					if (cb)
+						cb(status);
 					ongoing.erase(ret);
+					{
+						std::lock_guard<std::mutex> guard(queue_mutex);
+						inflight--;
+					}
 				}
 			}
 		}
@@ -79,7 +86,7 @@ private:
 	unsigned inflight, maxinflight;
 	unsigned niceadj;
 	std::atomic<bool> end;
-	std::mutex queue_mutex;
+	mutable std::mutex queue_mutex;
 	std::thread worker;
 
 public:
@@ -100,6 +107,16 @@ public:
 		std::lock_guard<std::mutex> guard(queue_mutex);
 		queue.push_back(
 			t_exec{.exec = executable, .args = args, .cb = cb});
+	}
+
+	unsigned size() const {
+		std::lock_guard<std::mutex> guard(queue_mutex);
+		return queue.size() + inflight;
+	}
+
+	unsigned queue_size() const {
+		std::lock_guard<std::mutex> guard(queue_mutex);
+		return queue.size();
 	}
 };
 
