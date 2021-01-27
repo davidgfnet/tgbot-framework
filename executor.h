@@ -15,6 +15,8 @@
 #include <sys/types.h>
 #include <sys/wait.h>
 
+#include "cqueue.h"
+
 // Forker, with maximum number of children
 
 class Executor {
@@ -26,96 +28,64 @@ private:
 	};
 
 	void work() {
-		while (!end) {
-			// Check whether we can add new children!
-			while (inflight < maxinflight) {
-				// Mutex acquire
-				std::lock_guard<std::mutex> guard(queue_mutex);
-				if (queue.empty())
-					break;
-				launch(queue.front());
-				queue.pop_front();
-				inflight++;
+		t_exec elem;
+		while (!end && queue.pop(&elem)) {
+			pid_t child = fork();
+			if (!child) {
+				// Adjust niceness
+				nice(this->niceadj);
+
+				// We are the children, execv!
+				char const *args[elem.args.size()+1] = {0};
+				for (unsigned i = 0; i < elem.args.size(); i++)
+					args[i] = (char*)elem.args[i].c_str();
+
+				execvp(elem.exec.c_str(), (char* const*)args);
+				exit(1);
 			}
 
-			// Check for finished child
-			int status;
-			pid_t ret = waitpid(-1, &status, WNOHANG);
-
-			if (ret <= 0)   // Just wait a bit, not too long
-				usleep(100000);
-			else {
-				// Lookup the pid and call the callback
-				if (ongoing.count(ret)) {
-					// Callback could be null
-					auto & cb = ongoing[ret].cb;
-					if (cb)
-						cb(status);
-					ongoing.erase(ret);
-					{
-						std::lock_guard<std::mutex> guard(queue_mutex);
-						inflight--;
-					}
+			// Wait for child to finish
+			while (!end) {
+				int status;
+				pid_t ret = waitpid(child, &status, WNOHANG);
+				if (ret <= 0)
+					usleep(100000);  // Wait a bit to poll again
+				else {
+					if (elem.cb)
+						elem.cb(status);
+					break;
 				}
 			}
 		}
 	}
 
-	void launch(t_exec ex) {
-		pid_t child = fork();
-		if (child) {
-			// Add the t_exec in the map, indexed by PID
-			ongoing[child] = ex;
-		}
-		else {
-			// Adjust niceness
-			nice(this->niceadj);
-
-			// We are the children, execv!
-			char const *args[ex.args.size()+1] = {0};
-			for (unsigned i = 0; i < ex.args.size(); i++)
-				args[i] = (char*)ex.args[i].c_str();
-
-			execvp(ex.exec.c_str(), (char* const*)args);
-			exit(1);
-		}
-	}
-
-	std::list<t_exec> queue;
-	std::unordered_map<pid_t, t_exec> ongoing;
-	unsigned inflight, maxinflight;
+	ConcurrentQueue<t_exec> queue;
 	unsigned niceadj;
 	std::atomic<bool> end;
-	mutable std::mutex queue_mutex;
-	std::thread worker;
+	std::vector<std::thread> workers;
 
 public:
 	Executor(unsigned maxinflight, unsigned niceadj = 0)
-	:inflight(0), maxinflight(maxinflight), niceadj(niceadj), end(false) {
-		worker = std::thread(&Executor::work, this);
+	: niceadj(niceadj), end(false) {
+		for (unsigned i = 0; i < maxinflight; i++)
+			workers.emplace_back(&Executor::work, this);
 	}
 
 	~Executor() {
 		end = true;
-		worker.join();
+		queue.close();
+		for (auto & worker : workers)
+			worker.join();
 	}
 
 	void execute(std::string executable,
 	             std::vector<std::string> args,
 	             std::function<void(int)> cb) {
-		// Fork ourselves and execute the binary.
-		std::lock_guard<std::mutex> guard(queue_mutex);
-		queue.push_back(
+		queue.push(
 			t_exec{.exec = executable, .args = args, .cb = cb});
 	}
 
-	unsigned size() const {
-		std::lock_guard<std::mutex> guard(queue_mutex);
-		return queue.size() + inflight;
-	}
-
 	unsigned queue_size() const {
-		std::lock_guard<std::mutex> guard(queue_mutex);
 		return queue.size();
 	}
 };

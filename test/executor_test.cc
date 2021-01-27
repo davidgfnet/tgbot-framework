@@ -7,26 +7,29 @@
 int main() {
 	rmdir("/tmp/tmplocket99");
 
-	Executor *te = new Executor(4, 1);
-	assert(te->size() == 0);
+	Executor te1(4, 1);
+	Executor te2(4, 1);
+	Executor te3(4, 1);
+	assert(te1.queue_size() == 0 && te2.queue_size() == 0);
 	for (unsigned i = 0; i < 8; i++) {
-		te->execute("bash", {"bash", "-c", "until [ -d /tmp/tmplocket99 ]; do sleep 0.1; done"}, [] (int code) {} );
-		te->execute("bash", {"bash", "-c", "until [ -d /tmp/tmplocket99 ]; do sleep 0.1; done"}, NULL);
+		te1.execute("bash", {"bash", "-c", "until [ -d /tmp/tmplocket99 ]; do sleep 0.1; done"}, [] (int code) {} );
+		te1.execute("bash", {"bash", "-c", "until [ -d /tmp/tmplocket99 ]; do sleep 0.1; done"}, NULL);
+		te2.execute("bash", {"bash", "-c", "until [ -d /tmp/tmplocket99 ]; do sleep 0.1; done"}, NULL);
 	}
-	assert(te->size() == 16);
 
 	// Wait for it to schedule the processes
-	while(te->queue_size() != 12);
-	assert(te->queue_size() == 12);
+	while(te1.queue_size() != 12);
+	assert(te1.queue_size() == 12);
+
+	while(te2.queue_size() != 4);
+	assert(te2.queue_size() == 4);
 
 	// Release the lock
-	mkdir("/tmp/tmplocket99", S_IRWXU);
+	te3.execute("mkdir", {"mkdir", "/tmp/tmplocket99"}, NULL);
 
 	// Wait for it to drain
-	while(te->size() > 0);
-	assert(te->size() == 0);
-
-	delete te;
+	while(te1.queue_size() > 0);
+	assert(te1.queue_size() == 0);
 }
 
 

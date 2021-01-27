@@ -10,7 +10,11 @@ all:
 	./executor_test.bin
 	lcov -c -d . -o executor_test.info
 
-	lcov -a executor_test.info -a util_test.info -o total.info
+	g++ -o cqueue_test.bin cqueue_test.cc -I .. $(CFLAGS)
+	./cqueue_test.bin
+	lcov -c -d . -o cqueue_test.info
+
+	lcov -a executor_test.info -a util_test.info -a cqueue_test.info -o total.info
 	rm -rf coverage/
 	genhtml -o coverage/ total.info
 
