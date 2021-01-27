@@ -36,6 +36,19 @@ int main() {
 	assert(fromhex("ff") == "\xff");
 	assert(fromhex("F0") == "\xf0");
 	assert(fromhex("41424344454647484142434445464748") == "ABCDEFGHABCDEFGH");
+	assert(fromhex("1") == "");
+
+	// Char escaping
+	assert(charescape("foo*bar", '$') == "foo*bar");
+	assert(charescape("foo*bar", '*') == "foo\\*bar");
+
+	// Other str functions
+	assert(tr("  foo      bar    ") == " foo bar ");
+	assert(makeshort("hello there foo bar lol", 99) == "hello there foo bar lol");
+	assert(makeshort("hello there foo bar lol", 13) == "hello...");
+	assert(makeshort("hello there foo bar lol", 15) == "hello there...");
+	assert(makeshort("hello there foo bar lol", 17) == "hello there...");
+	assert(makeshort("hello there foo bar lol", 18) == "hello there foo...");
 
 	// URL encoding
 	assert(urienc("https://foobar?a=123+456") == "https%3a%2f%2ffoobar%3fa%3d123%2b456");
@@ -46,5 +59,12 @@ int main() {
 
 	// HTML escape
 	assert(htmlescape("<a> foo & \"lol\"") == "&lt;a&gt; foo &amp; &quot;lol&quot;");
+
+	// Size repr
+	assert(hsize(1) == "1B");
+	assert(hsize(1580) == "1.5KiB");
+	assert(hsize(1024*1024*2ULL) == "2.0MiB");
+	assert(hsize(1024ULL*1024*1024*3) == "3.0GiB");
+	assert(hsize(1024ULL*1024*1024*1024*5) == "5.0TiB");
 }
 

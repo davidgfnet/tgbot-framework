@@ -27,6 +27,16 @@ public:
 		condvar.notify_one();
 	}
 
+	unsigned size() const {
+		std::unique_lock<std::mutex> lock(mutex_);
+		return q.size();
+	}
+
+	bool empty() const {
+		std::unique_lock<std::mutex> lock(mutex_);
+		return q.empty();
+	}
+
 	bool pop(T *item) noexcept {
 		std::unique_lock<std::mutex> lock(mutex_);
 		while (q.empty() && !nowriter)
@@ -43,7 +53,7 @@ public:
 
 private:
 	std::list<T> q;     // list of items
-	std::mutex mutex_;  // protection mutex
+	mutable std::mutex mutex_;  // protection mutex
 	std::condition_variable condvar; // Wait variable
 	std::atomic<bool> nowriter;      // Indicates no more writes will happen
 };
