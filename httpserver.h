@@ -39,6 +39,7 @@ class HTTPServer {
 public:
 	HTTPServer(unsigned port, std::function<void(const HTTPReq*)> usercb,
 	           unsigned max_req_size = 8*1024) {
+		this->daemon = NULL;
 		this->usercb = usercb;
 		this->port = port;
 		this->max_req_size = max_req_size;
@@ -58,7 +59,8 @@ public:
 		{
 			// Stop accepting new connections and clean up everything
 			std::lock_guard<std::mutex> g(mtx);
-			MHD_quiesce_daemon(daemon);
+			if (daemon)
+				MHD_quiesce_daemon(daemon);
 			// Ensure all callbacks will do nothing but return
 			drained = true;
 			
@@ -75,7 +77,8 @@ public:
 
 		}
 		// Now we can kill the daemon more or less cleanly
-		MHD_stop_daemon(daemon);
+		if (daemon)
+			MHD_stop_daemon(daemon);
 		daemon = NULL;
 	}
 
